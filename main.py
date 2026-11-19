@@ -1,42 +1,55 @@
-"""Write the entry image for the 19 November 2026 news-image bounty.
+#!/usr/bin/env python3
+"""Deliver the picture for the news-image-20261119 bounty.
 
-The picture is committed in this repository as ``entry.png``: one
+``entry.png`` sits in this repository next to this file: a single
 image summing up the world's news of Thursday 19 November 2026,
-drawn by ``draw.py`` (kept beside this file; the README lists the
-stories it shows). The grader's container installs nothing and has
-no Pillow, so this program is standard library only: it copies the
-committed image to the output path byte for byte, which also makes
-it deterministic — every run writes the asset's exact bytes.
+painted by the companion generator ``draw.py`` (the README lists
+the stories shown). The judging sandbox installs nothing, so this
+program sticks to the standard library: it copies the committed
+picture to the output location exactly as stored, which also makes
+the result deterministic - repeated runs emit identical bytes.
 """
 
 import hashlib
 import os
 import shutil
-from pathlib import Path
+import sys
 
-ASSET_NAME = "entry.png"
-OUTPUT_NAME = "entry.png"
-PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+PICTURE = "entry.png"
+PNG_SIGNATURE = b"\x89\x50\x4e\x47\x0d\x0a\x1a\x0a"
 
 
-def main() -> None:
-    here = Path(__file__).resolve().parent
-    asset = here / ASSET_NAME
-    if not asset.is_file():
-        raise SystemExit(f"asset missing from repository: {asset}")
-    if not asset.read_bytes().startswith(PNG_MAGIC):
-        raise SystemExit("asset is not a PNG file")
-    out_dir = Path(os.environ.get("MAKEFUN_OUTPUT_DIR", "/output"))
-    out_dir.mkdir(parents=True, exist_ok=True)
-    target = out_dir / OUTPUT_NAME
-    shutil.copyfile(asset, target)
-    # Read both files back and compare digests, so a truncated copy
-    # can never pass silently: the grader must see the whole image.
-    src_digest = hashlib.sha256(asset.read_bytes()).hexdigest()
-    out_digest = hashlib.sha256(target.read_bytes()).hexdigest()
-    if src_digest != out_digest:
-        raise SystemExit("output digest does not match the committed asset")
+def picture_path():
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        PICTURE)
+
+
+def digest_of(path):
+    with open(path, "rb") as handle:
+        return hashlib.sha256(handle.read()).hexdigest()
+
+
+def emit():
+    source = picture_path()
+    if not os.path.isfile(source):
+        print("committed picture is missing: " + source, file=sys.stderr)
+        return 1
+    with open(source, "rb") as handle:
+        if handle.read(len(PNG_SIGNATURE)) != PNG_SIGNATURE:
+            print("committed picture is not a PNG", file=sys.stderr)
+            return 1
+    out_dir = os.environ.get("MAKEFUN_OUTPUT_DIR", "/output")
+    os.makedirs(out_dir, exist_ok=True)
+    destination = os.path.join(out_dir, PICTURE)
+    shutil.copyfile(source, destination)
+    # A short copy must never slip through unnoticed: the grader
+    # judges exactly the bytes found at the destination.
+    if digest_of(source) != digest_of(destination):
+        print("copied picture differs from the committed one",
+              file=sys.stderr)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(emit())
